@@ -60,21 +60,21 @@ func (bc *Blockchain) replaceChain(candidateChain []*Block) {
 	}
 }
 
-func IsBlockValid(block, prevBlock Block) bool {
-	if block.Index != prevBlock.Index+1 {
-		return false
-	}
-
-	if bytes.Compare(block.PrevHash, prevBlock.Hash) != 0 {
-		return false
-	}
-
-	if bytes.Compare(block.Hash, GenerateHash(&block)) != 0 {
-		return false
-	}
-
-	return true
-}
+//func IsBlockValid(block, prevBlock Block) bool {
+//	if block.Index != prevBlock.Index+1 {
+//		return false
+//	}
+//
+//	if bytes.Compare(block.PrevHash, prevBlock.Hash) != 0 {
+//		return false
+//	}
+//
+//	if bytes.Compare(block.Hash, GenerateHash(&block)) != 0 {
+//		return false
+//	}
+//
+//	return true
+//}
 
 func main() {
 	fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
