@@ -9,23 +9,29 @@ import (
 )
 
 type Block struct {
-	Timestamp     int64
-	Data          []byte
-	PrevBlockHash []byte
-	Hash          []byte
+	Index       int64
+	Timestamp   int64
+	PrevHash    []byte
+	Transaction []byte
+	Hash        []byte
 }
 
-func (b *Block) SetHash() {
-	timestamp := []byte(strconv.FormatInt(b.Timestamp, 10))
-	headers := bytes.Join([][]byte{b.PrevBlockHash, b.Data, timestamp}, []byte{})
+func GenerateHash(block *Block) []byte {
+	index := []byte(strconv.FormatInt(block.Index, 10))
+	timestamp := []byte(strconv.FormatInt(block.Timestamp, 10))
+	headers := bytes.Join([][]byte{index, timestamp, block.Transaction, block.PrevHash}, []byte{})
 	hash := sha256.Sum256(headers)
 
-	b.Hash = hash[:]
+	return hash[:]
 }
 
-func NewBlock(data string, prevBlockHash []byte) *Block {
-	block := &Block{time.Now().Unix(), []byte(data), prevBlockHash, []byte{}}
-	block.SetHash()
+func NewBlock(transaction string, prevBlock *Block) *Block {
+	block := &Block{prevBlock.Index + 1,
+		time.Now().Unix(),
+		prevBlock.Hash,
+		[]byte(transaction),
+		[]byte{}}
+	block.Hash = GenerateHash(block)
 	return block
 }
 
@@ -34,18 +40,40 @@ type Blockchain struct {
 }
 
 // AddBlock is a Proof-Of-Work free method
-func (bc *Blockchain) AddBlock(data string) {
-	prevBlock := bc.blocks[len(bc.blocks)-1]
-	newBlock := NewBlock(data, prevBlock.Hash)
+func (bc *Blockchain) AddBlock(transaction string) {
+	latestBlock := bc.blocks[len(bc.blocks)-1]
+	newBlock := NewBlock(transaction, latestBlock)
 	bc.blocks = append(bc.blocks, newBlock)
 }
 
 func NewGenesisBlock() *Block {
-	return NewBlock("Genesis Block", []byte{})
+	return NewBlock("Genesis Block", &Block{})
 }
 
 func NewBlockchain() *Blockchain {
 	return &Blockchain{[]*Block{NewGenesisBlock()}}
+}
+
+func (bc *Blockchain) replaceChain(candidateChain []*Block) {
+	if len(candidateChain) > len(bc.blocks) {
+		bc.blocks = candidateChain
+	}
+}
+
+func IsBlockValid(block, prevBlock Block) bool {
+	if block.Index != prevBlock.Index+1 {
+		return false
+	}
+
+	if bytes.Compare(block.PrevHash, prevBlock.Hash) != 0 {
+		return false
+	}
+
+	if bytes.Compare(block.Hash, GenerateHash(&block)) != 0 {
+		return false
+	}
+
+	return true
 }
 
 func main() {
@@ -60,8 +88,8 @@ func main() {
 	bc.AddBlock("Send 2 more PRBS to Allan")
 
 	for _, block := range bc.blocks {
-		fmt.Printf("Prev. hash: %x\n", block.PrevBlockHash)
-		fmt.Printf("Data: %s\n", block.Data)
+		fmt.Printf("Prev. hash: %x\n", block.PrevHash)
+		fmt.Printf("Transaction: %s\n", block.Transaction)
 		fmt.Printf("Hash: %x\n", block.Hash)
 		fmt.Println()
 	}
