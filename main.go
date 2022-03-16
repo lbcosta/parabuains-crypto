@@ -4,9 +4,16 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"fmt"
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
+	"log"
+	"net/http"
+	"os"
 	"strconv"
 	"time"
 )
+
+var bc *Blockchain
 
 type Block struct {
 	Index       int64
@@ -40,10 +47,13 @@ type Blockchain struct {
 }
 
 // AddBlock is a Proof-Of-Work free method
-func (bc *Blockchain) AddBlock(transaction string) {
-	latestBlock := bc.blocks[len(bc.blocks)-1]
-	newBlock := NewBlock(transaction, latestBlock)
-	bc.blocks = append(bc.blocks, newBlock)
+func (bc *Blockchain) AddBlock(newBlock *Block) {
+	newBlockChain := append(bc.blocks, newBlock)
+	bc.ReplaceChain(newBlockChain)
+}
+
+func (bc *Blockchain) GetLatestBlock() *Block {
+	return bc.blocks[len(bc.blocks)-1]
 }
 
 func NewGenesisBlock() *Block {
@@ -54,43 +64,89 @@ func NewBlockchain() *Blockchain {
 	return &Blockchain{[]*Block{NewGenesisBlock()}}
 }
 
-func (bc *Blockchain) replaceChain(candidateChain []*Block) {
+func (bc *Blockchain) ReplaceChain(candidateChain []*Block) {
 	if len(candidateChain) > len(bc.blocks) {
 		bc.blocks = candidateChain
 	}
 }
 
-//func IsBlockValid(block, prevBlock Block) bool {
-//	if block.Index != prevBlock.Index+1 {
-//		return false
-//	}
-//
-//	if bytes.Compare(block.PrevHash, prevBlock.Hash) != 0 {
-//		return false
-//	}
-//
-//	if bytes.Compare(block.Hash, GenerateHash(&block)) != 0 {
-//		return false
-//	}
-//
-//	return true
-//}
+func IsBlockValid(block, prevBlock Block) bool {
+	if block.Index != prevBlock.Index+1 {
+		return false
+	}
+
+	if bytes.Compare(block.PrevHash, prevBlock.Hash) != 0 {
+		return false
+	}
+
+	if bytes.Compare(block.Hash, GenerateHash(&block)) != 0 {
+		return false
+	}
+
+	return true
+}
+
+func HandleGetBlockchain(c *gin.Context) {
+	c.JSON(200, bc.blocks)
+}
+
+func HandleAddBlock(c *gin.Context) {
+	newTransaction := c.Query("transaction")
+	if newTransaction == "" {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "a transaction is needed to create a block",
+		})
+		return
+	}
+
+	newBlock := NewBlock(newTransaction, bc.blocks[len(bc.blocks)-1])
+
+	if !IsBlockValid(*newBlock, *bc.GetLatestBlock()) {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": "block is not valid",
+		})
+		return
+	}
+
+	bc.AddBlock(newBlock)
+	c.JSON(http.StatusCreated, bc.GetLatestBlock())
+}
+
+func runHttpServer() error {
+	r := gin.Default()
+	if err := r.SetTrustedProxies(nil); err != nil {
+		log.Fatal(err)
+	}
+
+	r.GET("/", func(c *gin.Context) {
+		c.JSON(200, gin.H{
+			"message": "Parabuains!",
+		})
+	})
+	r.GET("/blockchain", HandleGetBlockchain)
+	r.POST("/block", HandleAddBlock)
+
+	addr := "localhost:" + os.Getenv("PORT")
+	if err := r.Run(addr); err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	fmt.Println()
 	fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
 	fmt.Println("$$$$$$$$$$ Parabuains (PRBS)! $$$$$$$$$$")
 	fmt.Println("$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$")
 	fmt.Println()
 
-	bc := NewBlockchain()
+	bc = NewBlockchain()
 
-	bc.AddBlock("Send 1 PRBS to Allan")
-	bc.AddBlock("Send 2 more PRBS to Allan")
-
-	for _, block := range bc.blocks {
-		fmt.Printf("Prev. hash: %x\n", block.PrevHash)
-		fmt.Printf("Transaction: %s\n", block.Transaction)
-		fmt.Printf("Hash: %x\n", block.Hash)
-		fmt.Println()
-	}
+	log.Fatal(runHttpServer())
 }
